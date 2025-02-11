@@ -1,5 +1,5 @@
 
-!pip install openpyxl Pillow pandas tqdm
+
 
 import pandas as pd
 import openpyxl
