@@ -150,20 +150,27 @@ def run_all_checks(file_data):
 
 def main():
     st.title("QA Checker for Chemical Smart Checkers")
-    st.markdown("Upload your Excel file to run the QA checks.")
-    uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
-    if uploaded_file is not None:
-        try:
-            result_buffer = run_all_checks(uploaded_file)
-            st.success("File processed successfully!")
-            st.download_button(
-                label="Download Processed File",
-                data=result_buffer,
-                file_name="output_checked.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+    
+    # Ask the pop-up question using a radio button
+    answer = st.radio("Is Ibrahem a good person?", ("Yes", "No"))
+    
+    if answer == "No":
+        st.warning("ok, check it manually")
+    else:
+        st.markdown("Upload your Excel file to run the QA checks.")
+        uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
+        if uploaded_file is not None:
+            try:
+                result_buffer = run_all_checks(uploaded_file)
+                st.success("File processed successfully!")
+                st.download_button(
+                    label="Download Processed File",
+                    data=result_buffer,
+                    file_name="output_checked.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.error(f"Error processing file: {e}")
 
 if __name__ == '__main__':
     main()
