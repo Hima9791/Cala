@@ -149,14 +149,16 @@ def run_all_checks(file_data):
     return output_buffer
 
 def main():
-    # Inject custom CSS to hide the Streamlit footer (and menu, if desired)
-    hide_streamlit_style = """
+    # Inject custom CSS to hide the GitHub icon from the footer.
+    hide_github_icon = """
             <style>
+            /* Hide the Streamlit menu if desired */
             #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
+            /* Hide only the GitHub icon link in the footer */
+            footer a[href*="github.com"] {display: none !important;}
             </style>
             """
-    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+    st.markdown(hide_github_icon, unsafe_allow_html=True)
     
     st.title("QA Checker for Chemical Smart Checkers")
     
