@@ -149,9 +149,18 @@ def run_all_checks(file_data):
     return output_buffer
 
 def main():
+    # Inject custom CSS to hide the Streamlit footer (and menu, if desired)
+    hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+    
     st.title("QA Checker for Chemical Smart Checkers")
     
-    # Ask the pop-up question using a radio button
+    # Pop-up question using a radio button
     answer = st.radio("Is Ibrahem a good person?", ("Yes", "No"))
     
     if answer == "No":
