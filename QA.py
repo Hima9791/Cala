@@ -1,17 +1,11 @@
-
-
-
+import streamlit as st
 import pandas as pd
 import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import Font
 import time
 from tqdm import tqdm
-from google.colab import drive
-
-# Mount Google Drive (if your files are stored there)
-# Uncomment the following lines if you need to access files from Google Drive
-# drive.mount('/content/drive')
+from io import BytesIO
 
 def create_key(df):
     df['Key'] = df['ChemicalID'].astype(str) + '_' + df['PartNumber'].astype(str)
@@ -20,15 +14,12 @@ def create_key(df):
 def validate_rows_count(df):
     actual_counts = df['Key'].value_counts().reset_index()
     actual_counts.columns = ['Key', 'ActualRowsCount']
-
     df = df.merge(actual_counts, on='Key')
     df['RowsCountGap'] = df['RowsCount '] - df['ActualRowsCount']
-
     df['Automated QA Comment'] = df.apply(
         lambda x: (x['Automated QA Comment'] + ' | ' if x['Automated QA Comment'] else '') + 'Rows count mismatch'
         if x['RowsCountGap'] != 0 else x['Automated QA Comment'], axis=1
     )
-
     return df
 
 def check_fmd_revision_flag(df):
@@ -41,15 +32,12 @@ def check_fmd_revision_flag(df):
 def check_homogeneous_material_mass_variation(df):
     df['HomogeneousMaterialName'] = df['HomogeneousMaterialName'].str.lower()
     grouped = df.groupby(['Key', 'HomogeneousMaterialName'])
-
     for (key, material_name), group in grouped:
         unique_masses = group['HomogeneousMaterialMass '].nunique()
-
         if unique_masses > 1:
-            df.loc[(df['Key'] == key) & (df['HomogeneousMaterialName'] == material_name), 'Automated QA Comment'] = df.loc[(df['Key'] == key) & (df['HomogeneousMaterialName'] == material_name), 'Automated QA Comment'].apply(
-                lambda x: x + ' | Multiple masses for the same homogeneous material' if x else 'Multiple masses for the same homogeneous material'
-            )
-
+            df.loc[(df['Key'] == key) & (df['HomogeneousMaterialName'] == material_name), 'Automated QA Comment'] = df.loc[
+                (df['Key'] == key) & (df['HomogeneousMaterialName'] == material_name), 'Automated QA Comment'
+            ].apply(lambda x: x + ' | Multiple masses for the same homogeneous material' if x else 'Multiple masses for the same homogeneous material')
     return df
 
 def check_homogeneous_material_mass(df):
@@ -57,12 +45,10 @@ def check_homogeneous_material_mass(df):
     df['CalculatedMass'] = df.groupby(['Key', 'HomogeneousMaterialName'])['Mass '].transform('sum')
     df['Homogeneous Mass Gap'] = df['CalculatedMass'] - df['HomogeneousMaterialMass ']
     df['MassMismatch'] = df['Homogeneous Mass Gap'].abs() >= 1
-
     df['Automated QA Comment'] = df.apply(
         lambda x: (x['Automated QA Comment'] + ' | ' if x['Automated QA Comment'] else '') + 'Fail: Mass mismatch'
         if x['MassMismatch'] else x['Automated QA Comment'], axis=1
     )
-
     return df
 
 def check_substance_homogeneous_material_percentage(df):
@@ -94,27 +80,20 @@ def check_substance_component_level_ppm(df):
     return df
 
 def calculate_gap_and_comment(df):
-    # Calculate the absolute gap
     gap = (df['TotalComponentMassProfile '] - df['TotalComponentMassSummation ']).abs()
-
-    # Calculate the gap as a percentage of the TotalComponentMassProfile
     gap_percentage = (gap / df['TotalComponentMassProfile ']) * 100
-
-    # Add comment to the existing 'Automated QA Comment' column if gap percentage >= 50%
     df['Automated QA Comment'] = df.apply(
         lambda x: (x['Automated QA Comment'] + ' | ' if x['Automated QA Comment'] else '') + 'Total VS Summation Gap is more than 50%'
-        if (x['TotalComponentMassProfile '] != 0 and (abs(x['TotalComponentMassProfile '] - x['TotalComponentMassSummation '])/x['TotalComponentMassProfile '] * 100) >= 50) else x['Automated QA Comment'], axis=1
+        if (x['TotalComponentMassProfile '] != 0 and (abs(x['TotalComponentMassProfile '] - x['TotalComponentMassSummation '])/x['TotalComponentMassProfile ']*100) >= 50) else x['Automated QA Comment'], axis=1
     )
-
     return df
 
 def check_total_component_mass_summation(df):
     unique_keys = df['Key'].unique()
     for key in tqdm(unique_keys, desc="Checking Total Component Mass Summation"):
         group = df[df['Key'] == key]
-        total_mass_sum = round(group['Mass '].sum(), 4)  # Rounding to 4 decimal places
+        total_mass_sum = round(group['Mass '].sum(), 4)
         total_component_mass_summation = group['TotalComponentMassSummation '].iloc[0]
-
         if total_mass_sum != total_component_mass_summation:
             df.loc[df['Key'] == key, 'Automated QA Comment'] = df.loc[df['Key'] == key, 'Automated QA Comment'].apply(
                 lambda x: x + ' | Software issue' if pd.notnull(x) and x else 'Software issue'
@@ -126,19 +105,16 @@ def clear_worksheet_but_keep_header(worksheet):
         for cell in row:
             cell.value = None
 
-def run_all_checks(file_path):
+def run_all_checks(file_data):
     start_time = time.time()
-
-    workbook = openpyxl.load_workbook(file_path)
+    # Load workbook from the uploaded file (file_data is a file-like object)
+    workbook = openpyxl.load_workbook(file_data)
     worksheet = workbook.active
     data = worksheet.values
     columns = next(data)[0:]
     df = pd.DataFrame(data, columns=columns)
-
-    # Ensure 'Automated QA Comment' column exists
     if 'Automated QA Comment' not in df.columns:
         df['Automated QA Comment'] = ''
-
     df = create_key(df)
     df = check_fmd_revision_flag(df)
     df = check_homogeneous_material_mass_variation(df)
@@ -149,76 +125,45 @@ def run_all_checks(file_path):
     df = check_substance_component_level_percentage(df)
     df = check_substance_component_level_ppm(df)
     df = calculate_gap_and_comment(df)
-
-    # Progress tracking using tqdm
     df = check_total_component_mass_summation(df)
-
-    # Select only the required columns
     added_columns = ['RowsCountGap', 'Homogeneous Mass Gap', 'homogeneousPercentageSum', 'homogeneousPPMSum', 'ComponentPercentageSum', 'ComponentPPMSum', 'Automated QA Comment']
-    df = df[list(columns) + added_columns]  # Append added columns to original columns
-
+    df = df[list(columns) + added_columns]
     clear_worksheet_but_keep_header(worksheet)
-
-    # Write headers explicitly and set font color to red for added columns
+    # Write headers and set font color for added columns
     for c_idx, column in enumerate(df.columns, start=1):
         cell = worksheet.cell(row=1, column=c_idx, value=column)
         if column in added_columns:
-            cell.font = Font(color="FF0000")  # Set font color to red for added columns
-
+            cell.font = Font(color="FF0000")
     # Write data starting from the second row
     for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=False), start=2):
         for c_idx, value in enumerate(row, start=1):
             worksheet.cell(row=r_idx, column=c_idx, value=value)
-
-    # Define output path
-    if file_path.endswith('.xlsx'):
-        output_path = file_path.replace('.xlsx', '_checked.xlsx')
-    elif file_path.endswith('.xls'):
-        output_path = file_path.replace('.xls', '_checked.xlsx')  # Save as .xlsx for consistency
-    else:
-        output_path = file_path + '_checked.xlsx'
-
-    workbook.save(output_path)
-
+    # Save the updated workbook to a BytesIO buffer
+    output_buffer = BytesIO()
+    workbook.save(output_buffer)
+    output_buffer.seek(0)
     end_time = time.time()
     elapsed_time = end_time - start_time
     mins, secs = divmod(elapsed_time, 60)
-    print(f"Process Complete. Processed file saved to {output_path}")
-    print(f"Elapsed Time: {int(mins):02}:{int(secs):02}")
+    st.write(f"Process Complete. Elapsed Time: {int(mins):02}:{int(secs):02}")
+    return output_buffer
 
-    return output_path
+def main():
+    st.title("QA Checker for Chemical Smart Checkers")
+    st.markdown("Upload your Excel file to run the QA checks.")
+    uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx", "xls"])
+    if uploaded_file is not None:
+        try:
+            result_buffer = run_all_checks(uploaded_file)
+            st.success("File processed successfully!")
+            st.download_button(
+                label="Download Processed File",
+                data=result_buffer,
+                file_name="output_checked.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
 
-# ----------------------------
-# Specify the file path below
-# ----------------------------
-
-# Example 1: If your file is in the current Colab environment
-# file_path = '/content/your_file.xlsx'
-
-# Example 2: If your file is stored in Google Drive
-# Make sure to mount Google Drive first (uncomment drive.mount above)
-# file_path = '/content/drive/MyDrive/path_to_your_file/your_file.xlsx'
-
-# Replace the below path with your actual file path
-file_path = '/content/qachemicalsmartcheckers_input-2025-02-10t090638122-e55670ee-6ed1-4ee2-82e4-ff5f692a7f6c.xlsx'  # <-- Update this path
-
-# ----------------------------
-# Run the QA Checks
-# ----------------------------
-
-# Check if the file exists
-import os
-
-if os.path.exists(file_path):
-    print(f"Processing file: {file_path}")
-    output_file = run_all_checks(file_path)
-    print(f"Processed file is saved at: {output_file}")
-
-    # Optional: If you want to download the file to your local machine
-    from google.colab import files
-    files.download(output_file)
-else:
-    print(f"File not found: {file_path}")
-    print("Please check the file path and ensure the file exists.")
-
-
+if __name__ == '__main__':
+    main()
