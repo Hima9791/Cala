@@ -146,7 +146,7 @@ def run_all_checks(file_data):
     df_all = create_key(df_all)
     unique_keys = df_all['Key'].unique()
     
-    chunk_size = 500  # Adjust chunk size as needed
+    chunk_size = 50  # Adjust chunk size as needed
     
     # Define the extra columns added by the QA checks
     added_columns = ['RowsCountGap', 'Homogeneous Mass Gap', 'homogeneousPercentageSum', 
