@@ -7,6 +7,10 @@ import time
 from tqdm import tqdm
 from io import BytesIO
 
+# ========================
+# --- QA Check Functions ---
+# ========================
+
 def create_key(df):
     df['Key'] = df['ChemicalID'].astype(str) + '_' + df['PartNumber'].astype(str)
     return df
@@ -105,68 +109,106 @@ def clear_worksheet_but_keep_header(worksheet):
         for cell in row:
             cell.value = None
 
+# ========================
+# --- Chunk Processing ---
+# ========================
+
+def process_chunk(chunk):
+    if 'Automated QA Comment' not in chunk.columns:
+        chunk['Automated QA Comment'] = ''
+    
+    chunk = check_fmd_revision_flag(chunk)
+    chunk = check_homogeneous_material_mass_variation(chunk)
+    chunk = validate_rows_count(chunk)
+    chunk = check_homogeneous_material_mass(chunk)
+    chunk = check_substance_homogeneous_material_percentage(chunk)
+    chunk = check_substance_homogeneous_material_ppm(chunk)
+    chunk = check_substance_component_level_percentage(chunk)
+    chunk = check_substance_component_level_ppm(chunk)
+    chunk = calculate_gap_and_comment(chunk)
+    chunk = check_total_component_mass_summation(chunk)
+    
+    return chunk
+
 def run_all_checks(file_data):
     start_time = time.time()
-    # Load workbook from the uploaded file (file_data is a file-like object)
+    # Load the workbook and extract data from the active worksheet
     workbook = openpyxl.load_workbook(file_data)
     worksheet = workbook.active
     data = worksheet.values
-    columns = next(data)[0:]
-    df = pd.DataFrame(data, columns=columns)
-    if 'Automated QA Comment' not in df.columns:
-        df['Automated QA Comment'] = ''
-    df = create_key(df)
-    df = check_fmd_revision_flag(df)
-    df = check_homogeneous_material_mass_variation(df)
-    df = validate_rows_count(df)
-    df = check_homogeneous_material_mass(df)
-    df = check_substance_homogeneous_material_percentage(df)
-    df = check_substance_homogeneous_material_ppm(df)
-    df = check_substance_component_level_percentage(df)
-    df = check_substance_component_level_ppm(df)
-    df = calculate_gap_and_comment(df)
-    df = check_total_component_mass_summation(df)
-    added_columns = ['RowsCountGap', 'Homogeneous Mass Gap', 'homogeneousPercentageSum', 'homogeneousPPMSum', 'ComponentPercentageSum', 'ComponentPPMSum', 'Automated QA Comment']
-    df = df[list(columns) + added_columns]
-    clear_worksheet_but_keep_header(worksheet)
-    # Write headers and set font color for added columns
-    for c_idx, column in enumerate(df.columns, start=1):
-        cell = worksheet.cell(row=1, column=c_idx, value=column)
+    columns = next(data)  # Get header row
+    df_all = pd.DataFrame(data, columns=columns)
+    
+    if 'Automated QA Comment' not in df_all.columns:
+        df_all['Automated QA Comment'] = ''
+    
+    # Create unique key column and get unique keys
+    df_all = create_key(df_all)
+    unique_keys = df_all['Key'].unique()
+    
+    chunk_size = 500  # Adjust chunk size as needed
+    
+    # Define the extra columns added by the QA checks
+    added_columns = ['RowsCountGap', 'Homogeneous Mass Gap', 'homogeneousPercentageSum', 
+                     'homogeneousPPMSum', 'ComponentPercentageSum', 'ComponentPPMSum', 'Automated QA Comment']
+    final_columns = list(columns) + added_columns
+    
+    # Create a new workbook for the output
+    output_workbook = openpyxl.Workbook()
+    sheet_out = output_workbook.active
+    
+    # Write the header row with red font for added columns
+    for c_idx, column in enumerate(final_columns, start=1):
+        cell = sheet_out.cell(row=1, column=c_idx, value=column)
         if column in added_columns:
             cell.font = Font(color="FF0000")
-    # Write data starting from the second row
-    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=False), start=2):
-        for c_idx, value in enumerate(row, start=1):
-            worksheet.cell(row=r_idx, column=c_idx, value=value)
-    # Save the updated workbook to a BytesIO buffer
+    
+    row_idx = 2
+    # Process the data in chunks
+    for i in tqdm(range(0, len(unique_keys), chunk_size), desc="Processing Chunks"):
+        key_chunk = unique_keys[i:i+chunk_size]
+        df_chunk = df_all[df_all['Key'].isin(key_chunk)]
+        df_chunk = process_chunk(df_chunk)
+        # Ensure all final columns exist in the chunk
+        for col in final_columns:
+            if col not in df_chunk.columns:
+                df_chunk[col] = ''
+        df_chunk = df_chunk[final_columns]
+        
+        for r in dataframe_to_rows(df_chunk, index=False, header=False):
+            for c_idx, value in enumerate(r, start=1):
+                sheet_out.cell(row=row_idx, column=c_idx, value=value)
+            row_idx += 1
+    
     output_buffer = BytesIO()
-    workbook.save(output_buffer)
+    output_workbook.save(output_buffer)
     output_buffer.seek(0)
+    
     end_time = time.time()
-    elapsed_time = end_time - start_time
-    mins, secs = divmod(elapsed_time, 60)
+    mins, secs = divmod(end_time - start_time, 60)
     st.write(f"Process Complete. Elapsed Time: {int(mins):02}:{int(secs):02}")
+    
     return output_buffer
 
+# ========================
+# --- Streamlit App UI ---
+# ========================
+
 def main():
-    # Inject custom CSS to hide the GitHub icon and shared-by block.
+    # Inject custom CSS to hide certain Streamlit UI elements
     hide_elements = """
-            <style>
-            /* Hide the Streamlit menu if desired */
-            #MainMenu {visibility: hidden;}
-            /* Hide the GitHub icon/link in the footer */
-            footer a[href*="github.com"] {display: none !important;}
-            /* Hide the 'shared by' block (profile preview) */
-            div[class^="_profilePreview"] {display: none !important;}
-            </style>
-            """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer a[href*="github.com"] {display: none !important;}
+    div[class^="_profilePreview"] {display: none !important;}
+    </style>
+    """
     st.markdown(hide_elements, unsafe_allow_html=True)
     
     st.title("QA Checker for Chemical Smart Checkers")
     
     # Pop-up question using a radio button
     answer = st.radio("Is Ibrahem a good person?", ("Yes", "No"))
-    
     if answer == "No":
         st.warning("ok, check it manually")
     else:
