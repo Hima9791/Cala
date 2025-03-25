@@ -1,11 +1,12 @@
 import time
- from tqdm import tqdm
- from io import BytesIO
- import gc  # Added for memory management
+from tqdm import tqdm
+from io import BytesIO
+import gc  # Added for memory management
  
  # ========================
  # --- QA Check Functions ---
- @@ -21,135 +20,182 @@ def validate_rows_count(df):
+# @@ -21,135 +20,182 @@ 
+def validate_rows_count(df):
      actual_counts.columns = ['Key', 'ActualRowsCount']
      df = df.merge(actual_counts, on='Key')
      df['RowsCountGap'] = df['RowsCount '] - df['ActualRowsCount']
