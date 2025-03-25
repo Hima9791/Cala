@@ -17,7 +17,7 @@ def validate_rows_count(df):
      )
      return df
  
- def check_fmd_revision_flag(df):
+def check_fmd_revision_flag(df):
      df['Automated QA Comment'] += df['FMDRevFlag'].apply(lambda x: ' | FMDRevFlag is Not Latest' if x == 'Not Latest' else '')
      df['Automated QA Comment'] = df.apply(
          lambda x: (x['Automated QA Comment'] + ' | ' if x['Automated QA Comment'] else '') + 'FMDRevFlag is Not Latest'
@@ -25,7 +25,7 @@ def validate_rows_count(df):
      )
      return df
  
- def check_homogeneous_material_mass_variation(df):
+def check_homogeneous_material_mass_variation(df):
      df['HomogeneousMaterialName'] = df['HomogeneousMaterialName'].str.lower()
      grouped = df.groupby(['Key', 'HomogeneousMaterialName'])
      for (key, material), group in grouped:
@@ -40,7 +40,7 @@ def validate_rows_count(df):
              ].apply(lambda x: x + ' | Multiple masses for the same homogeneous material' if x else 'Multiple masses for the same homogeneous material')
      return df
  
- def check_homogeneous_material_mass(df):
+def check_homogeneous_material_mass(df):
      df['HomogeneousMaterialName'] = df['HomogeneousMaterialName'].str.lower()
      df['CalculatedMass'] = df.groupby(['Key', 'HomogeneousMaterialName'])['Mass '].transform('sum')
      df['Homogeneous Mass Gap'] = df['CalculatedMass'] - df['HomogeneousMaterialMass ']
@@ -52,7 +52,7 @@ def validate_rows_count(df):
      )
      return df
  
- def check_substance_homogeneous_material_percentage(df):
+def check_substance_homogeneous_material_percentage(df):
      sums = df.groupby(['Key', 'HomogeneousMaterialName'])['SubstanceHomogeneousMaterialPercentage '].transform('sum')
      df['Automated QA Comment'] += sums.apply(lambda x: '' if 99.9 <= x <= 100.1 else ' | Fail: homogeneousPercentage sum != 100')
      df['homogeneousPercentageSum'] = df.groupby(['Key', 'HomogeneousMaterialName'])['SubstanceHomogeneousMaterialPercentage '].transform('sum')
@@ -61,7 +61,7 @@ def validate_rows_count(df):
      df['Automated QA Comment'] = df.apply(lambda x: x['Automated QA Comment'] + ' | ' + x['PercentageMatchComment'] if x['PercentageMatchComment'] else x['Automated QA Comment'], axis=1)
      return df
  
- def check_substance_homogeneous_material_ppm(df):
+def check_substance_homogeneous_material_ppm(df):
      sums = df.groupby(['Key', 'HomogeneousMaterialName'])['SubstanceHomogeneousMaterialPercentagePPM '].transform('sum')
      df['Automated QA Comment'] += sums.apply(lambda x: '' if 999000 <= x <= 1001000 else ' | Fail: homogeneousPPM sum != 1000000')
      df['homogeneousPPMSum'] = df.groupby(['Key', 'HomogeneousMaterialName'])['SubstanceHomogeneousMaterialPercentagePPM '].transform('sum')
@@ -70,7 +70,7 @@ def validate_rows_count(df):
      df['Automated QA Comment'] = df.apply(lambda x: x['Automated QA Comment'] + ' | ' + x['PPMMatchComment'] if x['PPMMatchComment'] else x['Automated QA Comment'], axis=1)
      return df
  
- def check_substance_component_level_percentage(df):
+def check_substance_component_level_percentage(df):
      sums = df.groupby('Key')['SubstanceComponentLevelPercentage '].transform('sum')
      df['Automated QA Comment'] += sums.apply(lambda x: '' if 99.0 <= x <= 101.0 else ' | Fail: Component level percentage sum != 100')
      df['ComponentPercentageSum'] = df.groupby('Key')['SubstanceComponentLevelPercentage '].transform('sum')
@@ -79,7 +79,7 @@ def validate_rows_count(df):
      df['Automated QA Comment'] = df.apply(lambda x: x['Automated QA Comment'] + ' | ' + x['ComponentPercentageMatchComment'] if x['ComponentPercentageMatchComment'] else x['Automated QA Comment'], axis=1)
      return df
  
- def check_substance_component_level_ppm(df):
+def check_substance_component_level_ppm(df):
      sums = df.groupby('Key')['SubstanceComponentLevelPPM '].transform('sum')
      df['Automated QA Comment'] += sums.apply(lambda x: '' if 990000 <= x <= 1010000 else ' | Fail: Component level PPM sum != 1000000')
      df['ComponentPPMSum'] = df.groupby('Key')['SubstanceComponentLevelPPM '].transform('sum')
@@ -88,7 +88,7 @@ def validate_rows_count(df):
      df['Automated QA Comment'] = df.apply(lambda x: x['Automated QA Comment'] + ' | ' + x['ComponentPPMMatchComment'] if x['ComponentPPMMatchComment'] else x['Automated QA Comment'], axis=1)
      return df
  
- def calculate_gap_and_comment(df):
+def calculate_gap_and_comment(df):
      gap_percentage = abs(df['TotalComponentMassProfile '] - df['TotalComponentMassSummation ']) / df['TotalComponentMassProfile '] * 100
      df['Automated QA Comment'] += gap_percentage.apply(lambda x: ' | Total VS Summation Gap is more than 50%' if x >= 50 else '')
      gap = (df['TotalComponentMassProfile '] - df['TotalComponentMassSummation ']).abs()
@@ -99,7 +99,7 @@ def validate_rows_count(df):
      )
      return df
  
- def check_total_component_mass_summation(df):
+def check_total_component_mass_summation(df):
      for key in df['Key'].unique():
      unique_keys = df['Key'].unique()
      for key in tqdm(unique_keys, desc="Checking Total Component Mass Summation"):
@@ -114,7 +114,7 @@ def validate_rows_count(df):
              )
      return df
  
- def clear_worksheet_but_keep_header(worksheet):
+def clear_worksheet_but_keep_header(worksheet):
      for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row):
          for cell in row:
              cell.value = None
@@ -123,7 +123,7 @@ def validate_rows_count(df):
  # --- Chunk Processing ---
  # ========================
  
- def process_chunk(chunk):
+def process_chunk(chunk):
      checks = [
          check_fmd_revision_flag,
          check_homogeneous_material_mass_variation,
@@ -161,7 +161,7 @@ def validate_rows_count(df):
      
      return chunk
  
- def run_all_checks(file_data):
+def run_all_checks(file_data):
      start_time = time.time()
      workbook = openpyxl.load_workbook(file_data, read_only=True)
      sheet = workbook.active
@@ -259,7 +259,7 @@ def validate_rows_count(df):
  # --- Streamlit App UI ---
  # ========================
  
- def main():
+def main():
      # Inject custom CSS to hide certain Streamlit UI elements
      hide_elements = """
      <style>
