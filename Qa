@@ -131,8 +131,9 @@ def run_all_checks(file_data):
         chunk_keys = unique_keys[i:i+chunk_size]
         chunk = df_all[df_all['Key'].isin(chunk_keys)].copy()
         chunk = process_chunk(chunk)
+        # Convert each row to a list to satisfy openpyxl's requirements
         for row in chunk[final_columns].values:
-            output_sheet.append(row)
+            output_sheet.append(row.tolist())
         del chunk
         gc.collect()
 
